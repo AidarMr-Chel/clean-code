@@ -5,5 +5,4 @@
 /.vs
 bin/
 obj/
-*.sln
 /Markdown/.vs/Markdown
