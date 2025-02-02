@@ -1,0 +1,30 @@
+﻿@model Stream
+@{
+    ViewBag.Title = "Edit File";
+}
+
+<h2>Edit File: @ViewBag.FileName</h2>
+
+<form asp-action="Edit" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="objectName" value="@ViewBag.ObjectName" />
+
+    <div class="form-group">
+        <label for="file">Upload a new version of the file:</label>
+        <input type="file" name="file" class="form-control" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+</form>
+
+<h3>Current File Content:</h3>
+<div>
+    @if (ViewBag.ContentType.StartsWith("image/"))
+    {
+        <img src="data:@ViewBag.ContentType;base64,@Convert.ToBase64String(((MemoryStream)Model).ToArray())" alt="Current File" />
+    }
+    else
+    {
+        <pre>@(new StreamReader(Model).ReadToEnd())</pre>
+    }
+</div>
