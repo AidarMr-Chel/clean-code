@@ -7,7 +7,7 @@ namespace Markdown
         public static string Render(string textInMd)
         {
             if (string.IsNullOrWhiteSpace(textInMd))
-                throw new ArgumentException("Input text cannot be null or empty.", nameof(textInMd));
+                return string.Empty;
 
             var renderedText = new StringBuilder();
             foreach (var paragraph in GetParagraphs(textInMd))

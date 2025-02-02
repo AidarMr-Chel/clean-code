@@ -1,0 +1,43 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="row">
+    <div class="col-md-5">
+        <textarea id="markdownText" class="form-control" rows="10" placeholder="Enter text md"></textarea>
+    </div>
+    <div class="col-md-2 d-flex align-items-center justify-content-center">
+        <button id="translateButton" class="btn btn-primary">Translate</button>
+    </div>
+    <div class="col-md-5 position-relative">
+        <textarea id="htmlText" class="form-control" rows="10" placeholder="Html code"></textarea>
+        <div class="text-right mt-2">
+            <button class="btn btn-secondary" style="width: 50px; height: 50px;">
+                <img src="https://www.freeiconspng.com/uploads/white-download-icon-png-32.png" alt="Save" style="width: 24px; height: 24px;">
+            </button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('translateButton').addEventListener('click', function () {
+            var markdownText = document.getElementById('markdownText').value;
+
+            fetch('/Markdown/Translate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(markdownText)
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('htmlText').value = data.html;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    </script>
+}
