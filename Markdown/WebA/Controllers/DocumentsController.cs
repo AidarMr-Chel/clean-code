@@ -47,31 +47,118 @@ public class DocumentsController : Controller
         return File(stream, fileInfo.ContentType, objectName);
     }
 
+
     [HttpGet]
     public async Task<IActionResult> Edit(string objectName)
     {
+        if (string.IsNullOrEmpty(objectName))
+        {
+            return RedirectToAction("Index");
+        }
+
         var userId = User.Identity.Name; // Получаем ID текущего пользователя
         var fileInfo = await _minioService.GetFileInfoAsync(userId, objectName);
+        if (fileInfo == null)
+        {
+            return NotFound("File not found.");
+        }
+
         var fileStream = await _minioService.GetFileAsync(userId, objectName);
+        if (fileStream == null)
+        {
+            return NotFound("File content not found.");
+        }
 
         ViewBag.ObjectName = objectName;
         ViewBag.FileName = objectName;
         ViewBag.ContentType = fileInfo.ContentType;
 
-        return View(fileStream);
+        // Если файл текстовый, считываем его содержимое
+        string fileContent;
+        if (fileInfo.ContentType.StartsWith("text/") || fileInfo.ContentType == "application/json" || fileInfo.ContentType == "application/javascript" || fileInfo.ContentType == "application/xml" || fileInfo.ContentType == "text/html")
+        {
+            using (var reader = new StreamReader(fileStream))
+            {
+                fileContent = await reader.ReadToEndAsync();
+            }
+        }
+        else
+        {
+            // Для нетекстовых файлов можно использовать base64 или другую обработку
+            fileContent = Convert.ToBase64String(await FileToBytes(fileStream));
+        }
+
+        return View(new EditFileViewModel
+        {
+            FileName = objectName,
+            Content = fileContent,
+            ContentType = fileInfo.ContentType
+        });
     }
 
     [HttpPost]
-    public async Task<IActionResult> Edit(string objectName, IFormFile file)
+    public async Task<IActionResult> Edit(string objectName, string newContent)
     {
-        if (file != null && file.Length > 0)
+        if (string.IsNullOrEmpty(objectName))
         {
-            var userId = User.Identity.Name; // Получаем ID текущего пользователя
-            await _minioService.ReplaceFileAsync(userId, objectName, file.OpenReadStream(), file.ContentType);
+            return RedirectToAction("Index");
         }
+
+        var userId = User.Identity.Name; // Получаем ID текущего пользователя
+        var fileInfo = await _minioService.GetFileInfoAsync(userId, objectName);
+        if (fileInfo == null)
+        {
+            return NotFound("File not found.");
+        }
+
+        // Обновляем содержимое файла
+        await _minioService.ReplaceFileAsync(userId, objectName, new MemoryStream(Encoding.UTF8.GetBytes(newContent)), fileInfo.ContentType);
 
         return RedirectToAction("Index");
     }
+
+    private async Task<byte[]> FileToBytes(Stream stream)
+    {
+        using (var memoryStream = new MemoryStream())
+        {
+            await stream.CopyToAsync(memoryStream);
+            return memoryStream.ToArray();
+        }
+    }
+
+    // Класс для передачи данных в представление
+    public class EditFileViewModel
+    {
+        public string FileName { get; set; }
+        public string Content { get; set; }
+        public string ContentType { get; set; }
+    }
+
+    //[HttpGet]
+    //public async Task<IActionResult> Edit(string objectName)
+    //{
+    //    var userId = User.Identity.Name; // Получаем ID текущего пользователя
+    //    var fileInfo = await _minioService.GetFileInfoAsync(userId, objectName);
+    //    var fileStream = await _minioService.GetFileAsync(userId, objectName);
+
+    //    ViewBag.ObjectName = objectName;
+    //    ViewBag.FileName = objectName;
+    //    ViewBag.ContentType = fileInfo.ContentType;
+
+    //    return View(fileStream);
+    //}
+
+    //[HttpPost]
+    //public async Task<IActionResult> Edit(string objectName, IFormFile file)
+    //{
+    //    if (file != null && file.Length > 0)
+    //    {
+    //        var userId = User.Identity.Name; // Получаем ID текущего пользователя
+    //        await _minioService.ReplaceFileAsync(userId, objectName, file.OpenReadStream(), file.ContentType);
+    //    }
+
+    //    return RedirectToAction("Index");
+    //}
 
     [HttpPost]
     public async Task<IActionResult> Delete(string objectName)

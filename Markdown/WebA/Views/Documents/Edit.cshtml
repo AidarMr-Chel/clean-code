@@ -1,30 +1,62 @@
-﻿@model Stream
-@{
-    ViewBag.Title = "Edit File";
+﻿@{
+    ViewBag.Title = "Редактировать Файл";
 }
 
-<h2>Edit File: @ViewBag.FileName</h2>
+<h2>Редактировать Файл: @Model.FileName</h2>
 
-<form asp-action="Edit" method="post" enctype="multipart/form-data">
-    <input type="hidden" name="objectName" value="@ViewBag.ObjectName" />
+<form asp-action="Edit" method="post">
+    <input type="hidden" name="objectName" value="@Model.FileName" />
 
-    <div class="form-group">
-        <label for="file">Upload a new version of the file:</label>
-        <input type="file" name="file" class="form-control" />
+    <div class="row">
+        <!-- Секция для содержимого файла -->
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="newContent">Содержимое Файла:</label>
+                <textarea id="newContent" name="newContent" class="form-control" rows="15">@Model.Content</textarea>
+            </div>
+        </div>
+
+        <!-- Секция для перевода и отображения HTML -->
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="translatedHtml">Переведенный HTML:</label>
+                <textarea id="translatedHtml" class="form-control" rows="15" readonly></textarea>
+            </div>
+            <button type="button" id="translateButton" class="btn btn-primary">Перевести</button>
+        </div>
     </div>
 
-    <button type="submit" class="btn btn-primary">Save Changes</button>
-    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+    <button type="submit" class="btn btn-success">Сохранить Изменения</button>
+    <a asp-action="Index" class="btn btn-secondary">Отмена</a>
 </form>
 
-<h3>Current File Content:</h3>
-<div>
-    @if (ViewBag.ContentType.StartsWith("image/"))
-    {
-        <img src="data:@ViewBag.ContentType;base64,@Convert.ToBase64String(((MemoryStream)Model).ToArray())" alt="Current File" />
-    }
-    else
-    {
-        <pre>@(new StreamReader(Model).ReadToEnd())</pre>
-    }
-</div>
+@section Scripts {
+    <script>
+        document.getElementById('translateButton').addEventListener('click', function () {
+            var markdownText = document.getElementById('newContent').value;
+
+            fetch('/Markdown/Translate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ markdownText: markdownText })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(errorData => {
+                        throw new Error(errorData.error || 'Произошла ошибка.');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('translatedHtml').value = data.html;
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert(error);
+            });
+        });
+    </script>
+}
