@@ -1,34 +1,38 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Diagnostics;
-using WebA.Models;
+using System.Threading.Tasks;
 
-namespace WebA.Controllers
+public class HomeController : Controller
 {
-    public class HomeController : Controller
+    private readonly MinioService _minioService;
+
+    public HomeController(MinioService minioService)
     {
-        private readonly ILogger<HomeController> _logger;
-
-
-        public HomeController(ILogger<HomeController> logger)
-        {
-            _logger = logger;
-        }
-
-        public IActionResult Index()
-        {
-            return View();
-        }
-
-        public IActionResult Privacy()
-        {
-            return View();
-        }
-
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-        }
+        _minioService = minioService;
     }
 
+    public IActionResult Index()
+    {
+        return View();
+    }
+
+    //[HttpPost]
+    //public async Task<IActionResult> Translate([FromBody] TranslateRequest request)
+    //{
+    //    // Здесь можно добавить логику для перевода Markdown в HTML
+    //    // Например, используя библиотеку для обработки Markdown
+
+    //    var html = "# Заголовок\n\nЭто **Markdown** текст."; // Пример перевода
+
+    //    return Ok(new { html = html });
+    //}
+
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> SaveFile([FromBody] SaveFileRequest request)
+    {
+        // Логика сохранения файла в MinIO
+        // Перенаправляем на метод в DocumentsController
+        return RedirectToAction("SaveFile", "Documents", request);
+    }
 }

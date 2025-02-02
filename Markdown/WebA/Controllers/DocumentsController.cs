@@ -1,9 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http;
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Minio.DataModel.Args;
+using System.Text;
 
 [Authorize]
 public class DocumentsController : Controller
@@ -35,8 +33,6 @@ public class DocumentsController : Controller
         {
             var userId = User.Identity.Name; // Получаем ID текущего пользователя
             var objectName = await _minioService.UploadFileAsync(userId, file.FileName, file.OpenReadStream(), file.ContentType);
-
-            // Можно сохранить objectName в базе данных или использовать для отображения
             ViewBag.Message = $"Файл '{objectName}' успешно загружен.";
         }
 
@@ -84,4 +80,41 @@ public class DocumentsController : Controller
         await _minioService.DeleteFileAsync(userId, objectName);
         return RedirectToAction("Index");
     }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveFile([FromBody] SaveFileRequest request)
+    {
+        var userId = User.Identity.Name; // Получаем ID текущего пользователя
+        var sanitizedFileName = _minioService.SanitizeFileName(request.fileName);
+        var bucketName = $"md-bucket-{_minioService.NormalizeBucketName(userId)}";
+
+        // Проверяем, существует ли корзина, если нет — создаем
+        var bucketExists = await _minioService.ObjectExistsAsync(bucketName, "dummy"); // Проверка на существование корзины
+        if (!bucketExists)
+        {
+            await _minioService._minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(bucketName));
+        }
+
+        // Генерируем уникальное имя файла
+        var objectName = await _minioService.GenerateUniqueObjectName(bucketName, sanitizedFileName);
+
+        // Преобразуем строку Markdown в поток
+        var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(request.content));
+
+        // Загружаем файл в MinIO
+        await _minioService._minioClient.PutObjectAsync(new PutObjectArgs()
+            .WithBucket(bucketName)
+            .WithObject(objectName)
+            .WithStreamData(memoryStream)
+            .WithObjectSize(memoryStream.Length)
+            .WithContentType("text/markdown"));
+
+        return Ok(new { success = true, message = "File saved successfully!" });
+    }
+}
+
+public class SaveFileRequest
+{
+    public string fileName { get; set; }
+    public string content { get; set; }
 }

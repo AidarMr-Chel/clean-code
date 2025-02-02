@@ -1,18 +1,19 @@
 ﻿using Minio;
-using Minio.ApiEndpoints;
 using Minio.DataModel;
 using Minio.DataModel.Args;
-using Minio.Exceptions;
+using Microsoft.Extensions.Configuration;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+using Minio.ApiEndpoints;
+using Minio.Exceptions;
+using System.Reactive.Linq;
 
 public class MinioService
 {
-    private readonly MinioClient _minioClient;
-    private readonly string _bucketName;
+    public readonly MinioClient _minioClient;
+    private readonly string _bucketNamePrefix;
 
     public MinioService(IConfiguration configuration)
     {
@@ -22,18 +23,14 @@ public class MinioService
             .WithCredentials(minioConfig["AccessKey"], minioConfig["SecretKey"])
             .WithSSL(bool.Parse(minioConfig["UseSSL"]))
             .Build();
-        _bucketName = "md-bucket"; // Имя корзины, где будут храниться файлы
+        _bucketNamePrefix = "md-bucket"; // Префикс для бакетов
     }
 
-
-
-
-
     // Нормализация имени корзины
-    private string NormalizeBucketName(string userId)
+    public string NormalizeBucketName(string userId)
     {
         var normalized = userId.ToLowerInvariant();
-        normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^a-z0-9.-]", "");
+        normalized = Regex.Replace(normalized, @"[^a-z0-9.-]", "");
         normalized = normalized.Trim('.', '-');
         if (normalized.Length > 63)
         {
@@ -43,7 +40,7 @@ public class MinioService
     }
 
     // Очистка имени файла от недопустимых символов
-    private string SanitizeFileName(string fileName)
+    public string SanitizeFileName(string fileName)
     {
         var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = new string(fileName
@@ -53,7 +50,7 @@ public class MinioService
     }
 
     // Генерация уникального имени файла
-    private async Task<string> GenerateUniqueObjectName(string bucketName, string fileName)
+    public async Task<string> GenerateUniqueObjectName(string bucketName, string fileName)
     {
         var sanitizedFileName = SanitizeFileName(fileName);
         var objectName = sanitizedFileName;
@@ -71,7 +68,7 @@ public class MinioService
     }
 
     // Проверка существования объекта
-    private async Task<bool> ObjectExistsAsync(string bucketName, string objectName)
+    public async Task<bool> ObjectExistsAsync(string bucketName, string objectName)
     {
         try
         {
@@ -80,7 +77,7 @@ public class MinioService
                 .WithObject(objectName));
             return true;
         }
-        catch (Exception)
+        catch (MinioException)
         {
             return false;
         }
@@ -89,7 +86,7 @@ public class MinioService
     // Загрузка файла
     public async Task<string> UploadFileAsync(string userId, string fileName, Stream fileStream, string contentType)
     {
-        var bucketName = $"{_bucketName}-{NormalizeBucketName(userId)}";
+        var bucketName = $"{_bucketNamePrefix}-{NormalizeBucketName(userId)}";
 
         // Проверяем, существует ли корзина, если нет — создаем
         var bucketExists = await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(bucketName));
@@ -112,26 +109,15 @@ public class MinioService
         return objectName;
     }
 
-
-
-
-
-
-
-
-
-
-   
-
     // Получение файла
     public async Task<Stream> GetFileAsync(string userId, string objectName)
     {
-        var bucketName = $"{_bucketName}-{NormalizeBucketName(userId)}";
+        var bucketName = $"{_bucketNamePrefix}-{NormalizeBucketName(userId)}";
 
         var memoryStream = new MemoryStream();
         await _minioClient.GetObjectAsync(new GetObjectArgs()
             .WithBucket(bucketName)
-            .WithObject(objectName) // Используем только имя файла
+            .WithObject(objectName)
             .WithCallbackStream(stream => stream.CopyTo(memoryStream)));
 
         memoryStream.Position = 0;
@@ -141,27 +127,27 @@ public class MinioService
     // Получение информации о файле
     public async Task<ObjectStat> GetFileInfoAsync(string userId, string objectName)
     {
-        var bucketName = $"{_bucketName}-{NormalizeBucketName(userId)}";
+        var bucketName = $"{_bucketNamePrefix}-{NormalizeBucketName(userId)}";
 
         return await _minioClient.StatObjectAsync(new StatObjectArgs()
             .WithBucket(bucketName)
-            .WithObject(objectName)); // Используем только имя файла
+            .WithObject(objectName));
     }
 
     // Удаление файла
     public async Task DeleteFileAsync(string userId, string objectName)
     {
-        var bucketName = $"{_bucketName}-{NormalizeBucketName(userId)}";
+        var bucketName = $"{_bucketNamePrefix}-{NormalizeBucketName(userId)}";
 
         await _minioClient.RemoveObjectAsync(new RemoveObjectArgs()
             .WithBucket(bucketName)
-            .WithObject(objectName)); // Используем только имя файла
+            .WithObject(objectName));
     }
 
     // Получение списка файлов пользователя
     public async Task<List<string>> ListFilesAsync(string userId)
     {
-        var bucketName = $"{_bucketName}-{NormalizeBucketName(userId)}";
+        var bucketName = $"{_bucketNamePrefix}-{NormalizeBucketName(userId)}";
         var files = new List<string>();
 
         // Проверяем, существует ли корзина
@@ -173,7 +159,8 @@ public class MinioService
 
         // Получаем список объектов
         var listArgs = new ListObjectsArgs()
-            .WithBucket(bucketName);
+            .WithBucket(bucketName)
+            .WithRecursive(false);
 
         var observable = _minioClient.ListObjectsAsync(listArgs);
 
@@ -185,10 +172,11 @@ public class MinioService
 
         return files;
     }
+
     // Замена файла
     public async Task ReplaceFileAsync(string userId, string objectName, Stream fileStream, string contentType)
     {
-        var bucketName = $"{_bucketName}-{userId}";
+        var bucketName = $"{_bucketNamePrefix}-{NormalizeBucketName(userId)}";
 
         // Удаляем старый файл, если он существует
         await DeleteFileAsync(userId, objectName);

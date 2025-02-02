@@ -30,14 +30,22 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(markdownText)
+                body: JSON.stringify({ markdownText: markdownText })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(errorData => {
+                        throw new Error(errorData.error || 'An error occurred.');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 document.getElementById('htmlText').value = data.html;
             })
             .catch(error => {
                 console.error('Error:', error);
+                alert(error);
             });
         });
 
@@ -50,7 +58,7 @@
                 return;
             }
 
-            fetch('/Home/SaveFile', {
+            fetch('/Documents/SaveFile', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -60,13 +68,14 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert("File saved successfully!");
+                    alert(data.message || "File saved successfully!");
                 } else {
-                    alert("Failed to save file.");
+                    alert(data.message || "Failed to save file.");
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
+                alert(error);
             });
         });
     </script>
